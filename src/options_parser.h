@@ -5,6 +5,12 @@
 #include <string>
 #include <exception>
 #include <stdexcept>
+#include <algorithm>
+#include <fstream>
+#include <iostream>
+#include <filesystem>
+
+using std::string;
 
 class OptionsParseException : public std::runtime_error {
 public:
@@ -67,10 +73,8 @@ public:
 
     void parse(const std::string& config_file);
 
-    double abs_err = 0, rel_err = 0;
-    int n_threads = 0;
-    double x_start = 0, x_end = 0, y_start = 0, y_end = 0;
-    int init_steps_x = 0, init_steps_y = 0, max_iter = 0;
+    string indir, out_by_a, out_by_n;
+    int indexing_threads = 0;
 };
 
 #endif //OPTIONS_PARSER_CONFIG_FILE_H

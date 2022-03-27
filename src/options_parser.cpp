@@ -1,10 +1,6 @@
 // This is a personal academic project. Dear PVS-Studio, please check it.
 // PVS-Studio Static Code Analyzer for C, C++, C#, and Java: http://www.viva64.com
 
-#include <filesystem>
-#include <string>
-#include <fstream>
-#include <iostream>
 #include "options_parser.h"
 
 namespace po = boost::program_options;
@@ -50,16 +46,10 @@ void command_line_options_t::parse(int ac, char **av) {
 
 config_file_options_t::config_file_options_t() {
     general_opt.add_options()
-            ("abs_err", po::value<double>(), "Absolute error")
-            ("rel_err", po::value<double>(), "Relative error")
-            ("n_threads", po::value<int>(), "Number of threads")
-            ("x_start", po::value<double>(), "Start x")
-            ("x_end", po::value<double>(), "End x")
-            ("y_start", po::value<double>(), "Start y")
-            ("y_end", po::value<double>(), "End y")
-            ("init_steps_x", po::value<int>(), "Init steps x")
-            ("init_steps_y", po::value<int>(), "Init steps y")
-            ("max_iter", po::value<int>(), "Max iterations");
+            ("indir", po::value<string>(), "Input directory")
+            ("out_by_a", po::value<string>(), "Path of alphabetically sorted result file")
+            ("out_by_n", po::value<string>(), "Path of numerically sorted result file")
+            ("indexing_threads", po::value<int>(), "Number of threads");
 }
 
 config_file_options_t::config_file_options_t(const string& config_file) :
@@ -79,19 +69,16 @@ void config_file_options_t::parse(const string& config_file) {
         }
         notify(var_map);
 
-        abs_err = var_map["abs_err"].as<double>();
-        rel_err = var_map["rel_err"].as<double>();
-        n_threads = var_map["n_threads"].as<int>();
-        x_start = var_map["x_start"].as<double>();
-        x_end = var_map["x_end"].as<double>();
-        y_start = var_map["y_start"].as<double>();
-        y_end = var_map["y_end"].as<double>();
-        init_steps_x = var_map["init_steps_x"].as<int>();
-        init_steps_y = var_map["init_steps_y"].as<int>();
-        max_iter = var_map["max_iter"].as<int>();
+        indir = var_map["indir"].as<string>();
+        indir.erase(std::remove(indir.begin(), indir.end(), '\"'), indir.end());
+        out_by_a = var_map["out_by_a"].as<string>();
+        out_by_a.erase(std::remove(out_by_a.begin(), out_by_a.end(), '\"'), out_by_a.end());
+        out_by_n = var_map["out_by_n"].as<string>();
+        out_by_n.erase(std::remove(out_by_n.begin(), out_by_n.end(), '\"'), out_by_n.end());
+        indexing_threads = var_map["indexing_threads"].as<int>();
     } catch (OpenConfigFileException &ex) {
         throw OpenConfigFileException(ex.what()); // Convert to our error type
     } catch (std::exception &ex) {
-        throw OptionsParseException(ex.what()); // Convert to our error type
+        throw OptionsParseException(ex.what());
     }
 }

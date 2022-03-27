@@ -66,7 +66,8 @@ include(cmake/CompilerWarnings.cmake)
 add_executable(${PROJECT_NAME} src/serial.cpp
         src/options_parser.cpp src/options_parser.h
         src/thread_safe_queue.cpp src/thread_safe_queue.h
-        src/time_measurement.h src/files_methods.h src/files_methods.cpp)
+        src/time_measurement.h src/files_methods.h src/files_methods.cpp
+        src/errors.h)
 
 #add_executable(${ONE_THREAD_EXE} src/serial.cpp
 #        src/options_parser.cpp src/options_parser.h
