@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.15)
 
 #! CHANGE YOUR PROJECT NAME
 #  It is used as your project's main executable name.
-set(PROJECT_NAME index_files)
+set(PROJECT_NAME serial)
 project(${PROJECT_NAME} C CXX) # project(${PROJECT_NAME} C CXX ASM)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -63,10 +63,10 @@ include(cmake/CompilerWarnings.cmake)
 ##########################################################
 
 #! Project main executable source compilation
-add_executable(${PROJECT_NAME} src/main.cpp
+add_executable(${PROJECT_NAME} src/serial.cpp
         src/options_parser.cpp src/options_parser.h
         src/thread_safe_queue.cpp src/thread_safe_queue.h
-        src/time_measurement.h)
+        src/time_measurement.h src/files_methods.h src/files_methods.cpp)
 
 #add_executable(${ONE_THREAD_EXE} src/serial.cpp
 #        src/options_parser.cpp src/options_parser.h

@@ -17,8 +17,21 @@ public:
     ThreadSafeQueue(const ThreadSafeQueue&) = delete;
     ThreadSafeQueue& operator=(const ThreadSafeQueue&) = delete;
 
-    // Add element. If max elements in queue, make thread wait.
+    // Add element by copying. If max elements in queue, make thread wait.
     void enque(const T& el){
+        // sets the scope for mutex locking
+        {
+            std::unique_lock<std::mutex> lock(mMutex);
+            if (mDeque.size() >= maxNumElements) {
+                mCondVarEnq.wait(lock);
+            }
+            mDeque.push_back(el);
+        }
+        mCondVarDeq.notify_one();
+    }
+
+    // Add element by moving. If max elements in queue, make thread wait.
+    void enque(T&& el){
         // sets the scope for mutex locking
         {
             std::unique_lock<std::mutex> lock(mMutex);
