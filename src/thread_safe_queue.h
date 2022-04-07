@@ -22,7 +22,7 @@ public:
         // sets the scope for mutex locking
         {
             std::unique_lock<std::mutex> lock(mMutex);
-            if (mDeque.size() >= maxNumElements) {
+            if ((int)mDeque.size() >= (int)maxNumElements) {
                 mCondVarEnq.wait(lock);
             }
             mDeque.push_back(el);
@@ -35,7 +35,7 @@ public:
         // sets the scope for mutex locking
         {
             std::unique_lock<std::mutex> lock(mMutex);
-            if (mDeque.size() >= maxNumElements) {
+            if ((int)mDeque.size() >= maxNumElements) {
                 mCondVarEnq.wait(lock);
             }
             mDeque.push_back(el);

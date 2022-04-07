@@ -19,108 +19,94 @@ mergeDicts()
 
 Merge to global dict.*/
 
-void overworkFile(ThreadSafeQueue<std::string> &filesContents, int numOfThreads, std::string numResults, std::string alphResults){
+void overworkFile(ThreadSafeQueue<std::string> &filesContents, std::unordered_map<std::string, int>& dict, std::mutex &mut){
 
-    std::map<std::string, size_t> dict;
-    std::vector<std::thread> threads;
-    std::mutex mut;
+    std::map<std::string, int> localDict;
 
-    for (size_t i = 0; i < numOfThreads; i++){
-        threads.emplace_back(indexFile, std::ref(dict), std::ref(filesContents), std::ref(mut));
-    }
-
-    for (size_t i = 0; i < numOfThreads; i++){
-        threads[i].join();
-    }
-
-    writeInFiles(numResults, alphResults, dict);
-}
-
-void indexFile(std::map<std::string, size_t> &dict, ThreadSafeQueue<std::string> &filesContents, std::mutex &mut){
-
-    thread_local std::map<std::string, size_t> localDict;
     while(true){
-        std::string file = filesContents.deque();
+        std::string file;
+        try{
+        file = filesContents.deque();
         if (std::equal(file.begin(), file.end(), "")){
             filesContents.enque("");
             break;
         }
-        std::for_each(file.begin(), file.end(), [](char & c){
-            c = std::tolower(c);
-        });
-        std::replace( file.begin(), file.end(), "\n", " ");
-        std::replace( file.begin(), file.end(), "\r", " ");
-
+        } catch (std::error_code e){
+            std::cerr << "Error code "<< e << ". Occurred while working with queue in thread." << std::endl;
+            continue;
+        }
         std::vector <std::string> words;
 
-        std::stringstream s(file);
-        std::string s2;
 
-        while (std::getline (s, s2, ' ')){
-            words.push_back(s2);
-        }
+        indexFile(words, file);
 
-        for (size_t i = 0; i < words.size(); i++){
-            if (localDict.find(words[i]) != localDict.end()){
-                localDict.find(words[i])->second + 1;
+        for (auto & word : words){
+            if (localDict.find(word) != localDict.end()){
+                localDict.find(word)->second += 1;
             } else {
-                localDict.insert({words[i], 1});
+                localDict.insert({word, 1});
             }
         }
+
         mut.lock();
         mergeDicts(dict, localDict);
         mut.unlock();
+        localDict.clear();
     }
-
 
 }
 
-void mergeDicts(std::map<std::string, size_t> &dict, std::map<std::string, size_t> &localDict){
-    for (size_t i = 0; i < localDict.size(); i++){
-        if (dict.find(localDict.begin()->first) != dict.end()){
-            dict.find(localDict.begin()->first)->second + localDict.begin()->second;
+void indexFile(std::vector <std::string> &words, std::string& file){
+
+    try{
+    std::for_each(file.begin(), file.end(), [](char & c){
+        c = std::tolower(c);
+    });
+    } catch (std::error_code e){
+        std::cerr << "Error code "<< e << ". Occurred while transforming word to lowercase" << std::endl;
+    }
+    size_t start_pos = 0;
+    try{
+    while((start_pos = file.find(std::string("\n"), start_pos)) != std::string::npos) {
+        file.replace(start_pos, std::string("\n").length(), std::string(" "));
+        start_pos += std::string(" ").length();
+    }
+
+    start_pos = 0;
+    while((start_pos = file.find(std::string("\r"), start_pos)) != std::string::npos) {
+        file.replace(start_pos, std::string("\r").length(), std::string(" "));
+        start_pos += std::string(" ").length();
+    }
+    } catch (std::error_code e){
+        std::cerr << "Error code "<< e << ". Occurred while deleting /n and /r from files" << std::endl;
+    }
+
+
+    try{
+    std::stringstream s(file);
+    std::string s2;
+
+    while (std::getline (s, s2, ' ')){
+        words.push_back(s2);
+    }
+    } catch (std::error_code e){
+        std::cerr << "Error code "<< e << ". Occurred while splitting file into words" << std::endl;
+    }
+
+}
+
+void mergeDicts(std::unordered_map<std::string, int> &dict, std::map<std::string, int> &localDict){
+    std::map<std::string, int>::iterator i;
+    try{
+    for (i = localDict.begin(); i != localDict.end(); i++){
+        if (dict.find(i->first) != dict.end()){
+            dict.at(i->first) += i->second;
         } else {
-            dict.insert({localDict.begin()->first, localDict.begin()->second});
+            dict.insert({i->first, i->second});
         }
-        localDict.erase(localDict.begin()->first);
+    }
+    } catch (std::error_code e){
+        std::cerr << "Error code "<< e << ". Occurred while merging dicts" << std::endl;
     }
 }
 
-void writeInFiles(std::string numResults, std::string alphResults, std::map<std::string, size_t> dict){
-
-    std::ofstream myfile;
-    myfile.open (numResults);
-    std::sort(dict.begin(), dict.end(), cmpBynum);
-    for(auto& el : dict) {
-        myfile << el.first << " = " << el.second << '\n';
-    }
-    myfile.close();
-
-    myfile.open (alphResults);
-    std::sort(dict.begin(), dict.end(), cmpByAlph);
-    for(auto& el : dict) {
-        myfile << el.first << " = " << el.second << '\n';
-    }
-    myfile.close();
-}
-
-bool cmpBynum(std::pair<std::string, int>& a,
-         std::pair<std::string, int>& b)
-{
-    return a.second < b.second;
-}
-
-bool cmpByAlph(std::pair<std::string, int>& a,
-         std::pair<std::string, int>& b)
-{
-
-    if (a.first[0] != b.first[0]){
-        return a.first[0] < b.first[0];
-    } else{
-        int i = 0;
-        while (a.first[i] == b.first[i]){
-            i++;
-        }
-        return a.first[0] < b.first[0];
-    }
-}
