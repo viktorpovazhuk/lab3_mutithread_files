@@ -8,6 +8,7 @@
 #include "errors.h"
 #include "thread_functions.h"
 #include "write_in_file.h"
+#include "time_measurement.h"
 
 namespace fs = std::filesystem;
 
@@ -21,6 +22,7 @@ using std::endl;
 #define PARALEL
 
 int main(int argc, char *argv[]) {
+
 
     string configFilename;
     if (argc < 2) {
@@ -50,9 +52,17 @@ int main(int argc, char *argv[]) {
         return Errors::READ_CFG_FILE;
     }
 
+    auto totalTimeStart = get_current_time_fenced();
+
+    auto time_start = get_current_time_fenced();
+
     ThreadSafeQueue<fs::path> paths;
 
-    findFiles(config_file_options->indir, paths);
+    std::thread filesEnumThread(findFiles, std::ref(config_file_options->indir), std::ref(paths));
+
+    if(filesEnumThread.joinable()){
+        filesEnumThread.join();
+    }
 
 
 #ifdef PRINT_CONTENT
@@ -67,8 +77,17 @@ int main(int argc, char *argv[]) {
 #endif
 
     ThreadSafeQueue<string> filesContents;
+    filesContents.setMaxElements(100);
 
-    readFiles(paths, filesContents);
+    std::thread filesReadThread(readFiles, std::ref(paths), std::ref(filesContents));
+
+    if(filesReadThread.joinable()){
+        filesReadThread.join();
+    }
+
+    auto time_finish = get_current_time_fenced();
+
+    auto timeReading = to_us(time_finish - time_start);
 
 #ifdef PRINT_CONTENT
     auto content = filesContents.deque();
@@ -102,6 +121,8 @@ int main(int argc, char *argv[]) {
         MyFile.close();
     }
 
+    time_start = get_current_time_fenced();
+
     std::unordered_map<std::string, int> dict;
     std::mutex mut;
 #ifdef PARALEL
@@ -128,7 +149,26 @@ int main(int argc, char *argv[]) {
     overworkFile(filesContents, dict, mut);
 #endif
 
+    time_finish = get_current_time_fenced();
+
+    auto timeFinding = to_us(time_finish - time_start);
+
+    time_start = get_current_time_fenced();
+
     writeInFiles(fn, fa, dict);
+
+    time_finish = get_current_time_fenced();
+
+    auto timeWriting = to_us(time_finish - time_start);
+
+    auto totalTimeFinish = get_current_time_fenced();
+
+    auto timeTotal = to_us(totalTimeFinish - totalTimeStart);
+
+    cout << "Total=" << timeTotal << "\n"
+    << "Reading=" << timeReading << "\n"
+    << "Finding=" << timeFinding << "\n"
+    << "Writing=" << timeWriting;
 
     return 0;
 }

@@ -57,7 +57,14 @@ public:
         }
         mCondVarEnq.notify_one();
         // TODO: won't produce data race?
+        //  write reason next time
         return el;
+    }
+
+    // Change maximal number of elements in queue.
+    void setMaxElements(int newMaxNumElements){
+        std::lock_guard<std::mutex> lock(mMutex);
+        maxNumElements = newMaxNumElements;
     }
 
     // Return size. Not reliable as size can change in next moment.
