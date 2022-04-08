@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.15)
 
 #! CHANGE YOUR PROJECT NAME
 #  It is used as your project's main executable name.
-set(PROJECT_NAME serial)
+set(PROJECT_NAME counter)
 project(${PROJECT_NAME} C CXX) # project(${PROJECT_NAME} C CXX ASM)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -15,7 +15,7 @@ SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
 ##########################################################
 
 set(TEST_EXECUTABLE test_ts_queue)
-set(ONE_THREAD_EXE serial)
+#set(ONE_THREAD_EXE serial)
 
 ##########################################################
 # User configurable options of the template
@@ -63,10 +63,12 @@ include(cmake/CompilerWarnings.cmake)
 ##########################################################
 
 #! Project main executable source compilation
-add_executable(${PROJECT_NAME} src/serial.cpp
+add_executable(${PROJECT_NAME} src/main.cpp
         src/options_parser.cpp src/options_parser.h
         src/thread_safe_queue.cpp src/thread_safe_queue.h
         src/time_measurement.h src/files_methods.h src/files_methods.cpp
+        src/write_in_file.h src/write_in_file.cpp
+        src/thread_functions.h src/thread_functions.cpp
         src/errors.h)
 
 #add_executable(${ONE_THREAD_EXE} src/serial.cpp
