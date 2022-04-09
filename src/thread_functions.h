@@ -17,9 +17,10 @@
 #include <fstream>
 #include <algorithm>
 #include <locale>
+#include "time_measurement.h"
 
 
-void overworkFile(ThreadSafeQueue<std::string> &filesContents, std::unordered_map<std::string, int>& dict, std::mutex &mut);
+void overworkFile(ThreadSafeQueue<std::string> &filesContents, std::unordered_map<std::string, int>& dict, std::mutex &mut, std::chrono::time_point<std::chrono::high_resolution_clock> &timeFindingFinish);
 
 void indexFile(std::vector <std::string> &words, std::string& file);
 

@@ -17,18 +17,18 @@ using std::cout;
 using std::cerr;
 using std::endl;
 
-#define PRINT_STEPS
 //#define PRINT_CONTENT
-#define PARALEL
+#define PARALLEL
+
+void findAndCountWords(int numberOfThreads, std::vector<std::thread> &threads, ThreadSafeQueue<string> &filesContents,
+                       std::unordered_map<std::string, int> &wordsDict, std::mutex &globalDictMutex,
+                       std::chrono::time_point<std::chrono::high_resolution_clock> &timeFinding);
 
 int main(int argc, char *argv[]) {
-
-
     string configFilename;
     if (argc < 2) {
         configFilename = "index.cfg";
-    }
-    else {
+    } else {
         std::unique_ptr<command_line_options_t> command_line_options;
         try {
             command_line_options = std::make_unique<command_line_options_t>(argc, argv);
@@ -52,57 +52,9 @@ int main(int argc, char *argv[]) {
         return Errors::READ_CFG_FILE;
     }
 
-    auto totalTimeStart = get_current_time_fenced();
-
-    auto time_start = get_current_time_fenced();
-
-    ThreadSafeQueue<fs::path> paths;
-
-    std::thread filesEnumThread(findFiles, std::ref(config_file_options->indir), std::ref(paths));
-
-    if(filesEnumThread.joinable()){
-        filesEnumThread.join();
-    }
-
-
-#ifdef PRINT_CONTENT
-    auto path = paths.deque();
-    paths.enque(path);
-    while (path != fs::path("")) {
-        cout << path << '\n';
-        path = paths.deque();
-        paths.enque(path);
-    }
-    cout << "--------------------------" << '\n';
-#endif
-
-    ThreadSafeQueue<string> filesContents;
-    filesContents.setMaxElements(100);
-
-    std::thread filesReadThread(readFiles, std::ref(paths), std::ref(filesContents));
-
-    if(filesReadThread.joinable()){
-        filesReadThread.join();
-    }
-
-    auto time_finish = get_current_time_fenced();
-
-    auto timeReading = to_us(time_finish - time_start);
-
-#ifdef PRINT_CONTENT
-    auto content = filesContents.deque();
-    filesContents.enque(content);
-    while (!content.empty()) {
-        cout << content << '\n';
-        content = filesContents.deque();
-        filesContents.enque(content);
-    }
-    cout << "--------------------------" << '\n';
-#endif
-
     std::string fn = config_file_options->out_by_n;
     std::string fa = config_file_options->out_by_a;
-    int nt = config_file_options->indexing_threads;
+    int numberOfThreads = config_file_options->indexing_threads;
 
     FILE *file;
     file = fopen(fn.c_str(), "r");
@@ -121,54 +73,106 @@ int main(int argc, char *argv[]) {
         MyFile.close();
     }
 
-    time_start = get_current_time_fenced();
+    auto timeStart = get_current_time_fenced();
+    std::chrono::time_point<std::chrono::high_resolution_clock> timeFindingFinish, timeReadingFinish, timeWritingFinish;
 
-    std::unordered_map<std::string, int> dict;
-    std::mutex mut;
-#ifdef PARALEL
-    std::vector<std::thread> threads;
+    ThreadSafeQueue<fs::path> paths;
+    ThreadSafeQueue<string> filesContents;
+    filesContents.setMaxElements(100);
+    std::unordered_map<std::string, int> wordsDict;
 
-    threads.reserve(nt);
-    try{
-    for (int i = 0; i < nt; i++){
-        threads.emplace_back(overworkFile, std::ref(filesContents), std::ref(dict), std::ref(mut));
+    std::mutex globalDictMutex;
+    std::vector<std::thread> threads(numberOfThreads);
+
+    std::thread filesEnumThread(findFiles, std::ref(config_file_options->indir), std::ref(paths));
+
+    std::thread filesReadThread(readFiles, std::ref(paths), std::ref(filesContents), std::ref(timeReadingFinish));
+
+    findAndCountWords(numberOfThreads, threads, filesContents, wordsDict, globalDictMutex, timeFindingFinish);
+
+    if (filesEnumThread.joinable()) {
+        filesEnumThread.join();
     }
-    } catch (std::error_code e){
-        std::cerr << "Error code "<< e << ". Occurred while splitting in threads." << std::endl;
+
+    if (filesReadThread.joinable()) {
+        filesReadThread.join();
     }
 
-    try{
-    for (int i = 0; i < nt; i++){
-        threads[i].join();
+    try {
+        for (auto &thread: threads) {
+            if (thread.joinable()) {
+                thread.join();
+            }
+        }
+    } catch (std::error_code e) {
+        std::cerr << "Error code " << e << ". Occurred while joining threads." << std::endl;
     }
-    } catch (std::error_code e){
-        std::cerr << "Error code "<< e << ". Occurred while joining in threads." << std::endl;
-    }
-    threads.clear();
-#else
-    overworkFile(filesContents, dict, mut);
-#endif
 
-    time_finish = get_current_time_fenced();
+    auto timeWritingStart = get_current_time_fenced();
 
-    auto timeFinding = to_us(time_finish - time_start);
+    writeInFiles(fn, fa, wordsDict);
 
-    time_start = get_current_time_fenced();
-
-    writeInFiles(fn, fa, dict);
-
-    time_finish = get_current_time_fenced();
-
-    auto timeWriting = to_us(time_finish - time_start);
+    timeWritingFinish = get_current_time_fenced();
 
     auto totalTimeFinish = get_current_time_fenced();
 
-    auto timeTotal = to_us(totalTimeFinish - totalTimeStart);
+    auto timeReading = to_us(timeReadingFinish - timeStart);
+    auto timeFinding = to_us(timeFindingFinish - timeStart);
+    auto timeWriting = to_us(timeWritingFinish - timeStart);
+    auto timeTotal = to_us(totalTimeFinish - timeStart);
 
     cout << "Total=" << timeTotal << "\n"
-    << "Reading=" << timeReading << "\n"
-    << "Finding=" << timeFinding << "\n"
-    << "Writing=" << timeWriting;
+         << "Reading=" << timeReading << "\n"
+         << "Finding=" << timeFinding << "\n"
+         << "Writing=" << timeWriting;
 
     return 0;
+}
+
+void findAndCountWords(int numberOfThreads, std::vector<std::thread> &threads, ThreadSafeQueue<string> &filesContents,
+                       std::unordered_map<std::string, int> &wordsDict, std::mutex &globalDictMutex,
+                       std::chrono::time_point<std::chrono::high_resolution_clock> &timeFindingFinish) {
+#ifdef PARALLEL
+    try {
+        for (int i = 0; i < numberOfThreads; i++) {
+            threads.emplace_back(overworkFile, std::ref(filesContents), std::ref(wordsDict), std::ref(globalDictMutex),
+                                 std::ref(timeFindingFinish));
+        }
+    } catch (std::error_code e) {
+        std::cerr << "Error code " << e << ". Occurred while splitting in threads." << std::endl;
+    }
+#else
+    ThreadSafeQueue<fs::path> paths;
+
+    findFiles(config_file_options->indir, paths);
+
+#ifdef PRINT_CONTENT
+    auto path = paths.deque();
+    paths.enque(path);
+    while (path != fs::path("")) {
+        cout << path << '\n';
+        path = paths.deque();
+        paths.enque(path);
+    }
+    cout << "--------------------------" << '\n';
+#endif
+
+    ThreadSafeQueue<string> filesContents;
+    filesContents.setMaxElements(100);
+
+    readFiles(paths, filesContents);
+
+#ifdef PRINT_CONTENT
+    auto content = filesContents.deque();
+    filesContents.enque(content);
+    while (!content.empty()) {
+        cout << content << '\n';
+        content = filesContents.deque();
+        filesContents.enque(content);
+    }
+    cout << "--------------------------" << '\n';
+#endif
+
+    overworkFile(filesContents, dict, mut);
+#endif
 }

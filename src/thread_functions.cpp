@@ -19,7 +19,7 @@ mergeDicts()
 
 Merge to global dict.*/
 
-void overworkFile(ThreadSafeQueue<std::string> &filesContents, std::unordered_map<std::string, int>& dict, std::mutex &mut){
+void overworkFile(ThreadSafeQueue<std::string> &filesContents, std::unordered_map<std::string, int>& dict, std::mutex &globalDictMutex, std::chrono::time_point<std::chrono::high_resolution_clock> &timeFindingFinish){
 
     std::map<std::string, int> localDict;
 
@@ -29,6 +29,8 @@ void overworkFile(ThreadSafeQueue<std::string> &filesContents, std::unordered_ma
         file = filesContents.deque();
         // TODO: why equal
         if (std::equal(file.begin(), file.end(), "")){
+            // don't need mutex because queue is empty => other threads wait
+            timeFindingFinish = get_current_time_fenced();
             filesContents.enque("");
             break;
         }
@@ -51,9 +53,9 @@ void overworkFile(ThreadSafeQueue<std::string> &filesContents, std::unordered_ma
             }
         }
 
-        mut.lock();
+        globalDictMutex.lock();
         mergeDicts(dict, localDict);
-        mut.unlock();
+        globalDictMutex.unlock();
         localDict.clear();
     }
 

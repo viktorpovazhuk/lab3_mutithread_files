@@ -13,7 +13,7 @@ void findFiles(string &filesDirectory, ThreadSafeQueue<fs::path> &paths) {
     paths.enque(fs::path(""));
 }
 
-void readFiles(ThreadSafeQueue<fs::path> &paths, ThreadSafeQueue<string> &filesContents) {
+void readFiles(ThreadSafeQueue<fs::path> &paths, ThreadSafeQueue<string> &filesContents, std::chrono::time_point<std::chrono::high_resolution_clock> &timeReadingFinish) {
     auto path = paths.deque();
     while (path != fs::path("")) {
         std::ifstream ifs(path);
@@ -24,4 +24,6 @@ void readFiles(ThreadSafeQueue<fs::path> &paths, ThreadSafeQueue<string> &filesC
     }
     filesContents.enque("");
     paths.enque(fs::path(""));
+
+    timeReadingFinish = get_current_time_fenced();
 }
