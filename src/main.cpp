@@ -82,8 +82,10 @@ int main(int argc, char *argv[]) {
     std::unordered_map<std::string, int> wordsDict;
 
     std::mutex globalDictMutex;
-    std::vector<std::thread> threads(numberOfThreads);
+    std::vector<std::thread> threads;
+    threads.reserve(numberOfThreads);
 
+#ifdef PARALLEL
     std::thread filesEnumThread(findFiles, std::ref(config_file_options->indir), std::ref(paths));
 
     std::thread filesReadThread(readFiles, std::ref(paths), std::ref(filesContents), std::ref(timeReadingFinish));
@@ -108,41 +110,10 @@ int main(int argc, char *argv[]) {
         std::cerr << "Error code " << e << ". Occurred while joining threads." << std::endl;
     }
 
-    auto timeWritingStart = get_current_time_fenced();
-
-    writeInFiles(fn, fa, wordsDict);
-
-    timeWritingFinish = get_current_time_fenced();
-
-    auto totalTimeFinish = get_current_time_fenced();
-
-    auto timeReading = to_us(timeReadingFinish - timeStart);
-    auto timeFinding = to_us(timeFindingFinish - timeStart);
-    auto timeWriting = to_us(timeWritingFinish - timeStart);
-    auto timeTotal = to_us(totalTimeFinish - timeStart);
-
-    cout << "Total=" << timeTotal << "\n"
-         << "Reading=" << timeReading << "\n"
-         << "Finding=" << timeFinding << "\n"
-         << "Writing=" << timeWriting;
-
-    return 0;
-}
-
-void findAndCountWords(int numberOfThreads, std::vector<std::thread> &threads, ThreadSafeQueue<string> &filesContents,
-                       std::unordered_map<std::string, int> &wordsDict, std::mutex &globalDictMutex,
-                       std::chrono::time_point<std::chrono::high_resolution_clock> &timeFindingFinish) {
-#ifdef PARALLEL
-    try {
-        for (int i = 0; i < numberOfThreads; i++) {
-            threads.emplace_back(overworkFile, std::ref(filesContents), std::ref(wordsDict), std::ref(globalDictMutex),
-                                 std::ref(timeFindingFinish));
-        }
-    } catch (std::error_code e) {
-        std::cerr << "Error code " << e << ". Occurred while splitting in threads." << std::endl;
-    }
 #else
-    ThreadSafeQueue<fs::path> paths;
+    paths.setMaxElements(999999);
+    filesContents.setMaxElements(999999);
+
 
     findFiles(config_file_options->indir, paths);
 
@@ -157,10 +128,7 @@ void findAndCountWords(int numberOfThreads, std::vector<std::thread> &threads, T
     cout << "--------------------------" << '\n';
 #endif
 
-    ThreadSafeQueue<string> filesContents;
-    filesContents.setMaxElements(100);
-
-    readFiles(paths, filesContents);
+    readFiles(paths, filesContents, timeReadingFinish);
 
 #ifdef PRINT_CONTENT
     auto content = filesContents.deque();
@@ -173,6 +141,39 @@ void findAndCountWords(int numberOfThreads, std::vector<std::thread> &threads, T
     cout << "--------------------------" << '\n';
 #endif
 
-    overworkFile(filesContents, dict, mut);
+    overworkFile(filesContents, wordsDict, globalDictMutex, timeFindingFinish);
 #endif
+
+    auto timeWritingStart = get_current_time_fenced();
+
+    writeInFiles(fn, fa, wordsDict);
+
+    timeWritingFinish = get_current_time_fenced();
+
+    auto totalTimeFinish = get_current_time_fenced();
+
+    auto timeReading = to_us(timeReadingFinish - timeStart);
+    auto timeFinding = to_us(timeFindingFinish - timeStart);
+    auto timeWriting = to_us(timeWritingFinish - timeWritingStart);
+    auto timeTotal = to_us(totalTimeFinish - timeStart);
+
+    cout << "Total=" << timeTotal << "\n"
+         << "Reading=" << timeReading << "\n"
+         << "Finding=" << timeFinding << "\n"
+         << "Writing=" << timeWriting;
+
+    return 0;
+}
+
+void findAndCountWords(int numberOfThreads, std::vector<std::thread> &threads, ThreadSafeQueue<string> &filesContents,
+                       std::unordered_map<std::string, int> &wordsDict, std::mutex &globalDictMutex,
+                       std::chrono::time_point<std::chrono::high_resolution_clock> &timeFindingFinish) {
+    try {
+        for (int i = 0; i < numberOfThreads; i++) {
+            threads.emplace_back(overworkFile, std::ref(filesContents), std::ref(wordsDict), std::ref(globalDictMutex),
+                                 std::ref(timeFindingFinish));
+        }
+    } catch (std::error_code e) {
+        std::cerr << "Error code " << e << ". Occurred while splitting in threads." << std::endl;
+    }
 }
